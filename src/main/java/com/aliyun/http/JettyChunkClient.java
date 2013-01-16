@@ -14,9 +14,9 @@ import org.eclipse.jetty.http.HttpSchemes;
 import org.eclipse.jetty.http.HttpVersions;
 import org.eclipse.jetty.io.Buffer;
 
-public class ChunkClient2 {
+public class JettyChunkClient {
 
-	private static int getChunkSizeFromInputStream(final Buffer content) throws IOException {
+	private int getChunkSizeFromInputStream(final Buffer content) throws IOException {
 
 		ByteArrayOutputStream baos = new ByteArrayOutputStream();
 		// States: 0=normal, 1=\r was scanned, 2=inside quoted string, -1=end
@@ -83,8 +83,14 @@ public class ChunkClient2 {
 
 	private class ChunkResponse {
 		private int pos;
-		private int size;
-		private StringBuffer response = new StringBuffer();
+		private int chunkSize;
+		private StringBuffer result = new StringBuffer();
+
+		public void reset() {
+			result.delete(0, chunkSize);
+			pos = 0;
+			chunkSize = 0;
+		}
 	}
 
 	public void call(HttpClient client) {
@@ -110,22 +116,24 @@ public class ChunkClient2 {
 
 			protected void onResponseChunked(Buffer content) throws IOException {
 				if (chunkResponse.pos == 0 && content.hasContent()) {
-					chunkResponse.size = getChunkSizeFromInputStream(content);
+					chunkResponse.chunkSize = getChunkSizeFromInputStream(content);
 				}
 
 				String buffer = new String(content.asArray());
-				chunkResponse.response.append(buffer);
+				chunkResponse.result.append(buffer);
 				chunkResponse.pos += buffer.length();
 
-				if (chunkResponse.size + 2 == chunkResponse.pos) {
-					System.out.println(chunkResponse.response.toString());
+				/**
+				 * 格式：chunksize + "\r\n" + content + "\r\n"
+				 * 
+				 */
+				if (chunkResponse.chunkSize + 2 == chunkResponse.pos) {
+					// TODO
+					// 获取到chunk数据，进行逻辑处理
+					System.out.println(chunkResponse.result.toString());
 
-					// reset
-					chunkResponse.response.delete(0, chunkResponse.size);
-					chunkResponse.pos = 0;
-					chunkResponse.size = 0;
+					chunkResponse.reset();
 				}
-
 			}
 
 		};
@@ -155,7 +163,7 @@ public class ChunkClient2 {
 		try {
 			client.start();
 
-			ChunkClient2 chunkClient = new ChunkClient2();
+			JettyChunkClient chunkClient = new JettyChunkClient();
 			chunkClient.call(client);
 
 			Thread.sleep(1000000);
